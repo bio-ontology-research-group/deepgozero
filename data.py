@@ -66,8 +66,8 @@ def main():
     normalizedOntology = normalizer.normalize(intAxioms, factory)
     rTranslator = ReverseAxiomTranslator(translator, ontology)
 
-    gos_df = pd.read_pickle('data/nodes.pkl')
-    terms = gos_df['nodes'].values
+    gos_df = pd.read_pickle('data/terms.pkl')
+    terms = gos_df['gos'].values
     terms_dict = {v:k for k, v in enumerate(terms)}
     relations = []
     rel_id = {}
@@ -103,10 +103,11 @@ def main():
     df = pd.read_pickle('data/train_data.pkl')
     hasfunc = []
     for i, row in enumerate(df.itertuples()):
-        p_id = row.proteins
+        p_id = i
         for go_id in row.exp_annotations:
-            go_id = terms_dict[go_id]
-            hasfunc.append((p_id, go_id))
+            if go_id in terms_dict:
+                go_id = terms_dict[go_id]
+                hasfunc.append((p_id, go_id))
     sub_df = pd.DataFrame({'subclass': subclass})
     rel_df = pd.DataFrame({'relations': relations})
     hf_df = pd.DataFrame({'hasfunc': hasfunc})
