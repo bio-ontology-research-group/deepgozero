@@ -50,20 +50,21 @@ def main(go_file, data_file, rels_file, terms_file,  model_file, batch_size, epo
     rels = {k: v for k, v in zip(rel_df['relations'].values, rel_df['ids'].values)}
     print(rels)
     subclass, hasfunc, relation  = load_data(data_file)
-    dataset = MyDataset(df, subclass, hasfunc, relation)
+    dataset = MyDataset(df, len(gos), subclass, hasfunc, relation)
     train_batches, train_steps = get_batches(dataset, batch_size)
 
     model = DGFuzModel(len(gos), len(rels))
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
-
+    loss_func = nn.BCELoss()
     
     for epoch in range(epochs):
         epoch_loss = 0
         model.train()
         with ck.progressbar(train_batches) as bar:
-            for data in bar:
-                loss = model(data).mean()
+            for data, labels in bar:
+                logits = model(data)
+                loss = loss_func(logits, labels)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -121,15 +122,41 @@ def compute_fmax(labels, preds):
 
 class MyDataset(IterableDataset):
 
-    def __init__(self, df, subclass, hasfunc, relation):
+    def __init__(self, df, nb_gos, subclass, hasfunc, relation):
         self.df = df
+        self.nb_gos = nb_gos
         self.subclass = subclass
+        self.subclass_set = set([(t[0].item(), t[1].item()) for t in subclass])
         self.sn = len(subclass)
         self.hasfunc = hasfunc
+        self.hasfunc_set = set([(t[0].item(), t[1].item()) for t in hasfunc])
         self.hn = len(hasfunc)
         self.relation = relation
+        self.relation_set = set([(t[0].item(), t[1].item(), t[2].item()) for t in relation])
         self.rn = len(relation)
         self.n = max(self.sn, max(self.hn, self.rn))
+
+    def get_negatives(self, subclass, hasfunc, relation):
+        sc, sd = subclass[0].item(), subclass[1].item()
+        while True:
+            sd = np.random.randint(self.nb_gos)
+            if (sc, sd) not in self.subclass_set:
+                subclass = (sc, sd)
+                break
+        p, hc = hasfunc[0].item(), hasfunc[1].item()
+        while True:
+            hc = np.random.randint(self.nb_gos)
+            if (p, hc) not in self.hasfunc_set:
+                hasfunc = (p, hc)
+                break
+        rc, rr, rd = relation[0].item(), relation[1].item(), relation[2].item()
+        while True:
+            rd = np.random.randint(self.nb_gos)
+            if (rc, rr, rd) not in self.relation_set:
+                relation = (rc, rr, rd)
+                break
+        return th.tensor(subclass).to(device), th.tensor(hasfunc).to(device), th.tensor(relation).to(device)
+            
 
     def get_data(self):
         si = 0
@@ -143,7 +170,11 @@ class MyDataset(IterableDataset):
             seq = self.df.iloc[int(prot)]['sequences']
             seq = to_onehot(seq)
             prot = th.from_numpy(seq).to(device)
-            yield self.subclass[si], prot, hc, self.relation[ri]
+            hasfunc = (prot, hc)
+            neg_sub, neg_has, neg_rel = self.get_negatives(self.subclass[si], self.hasfunc[hi], self.relation[ri])
+            neg_has = (prot, neg_has[1])
+            labels = th.FloatTensor([1, 0, 1, 0, 1, 0]).to(device)
+            yield self.subclass[si], neg_sub, hasfunc, neg_has, self.relation[ri], neg_rel, labels
             
     def __iter__(self):
         return self.get_data()
@@ -157,10 +188,14 @@ def get_batches(dataset, batch_size):
     return data_loader, steps
 
 def collate(samples):
-    subclass, prot, hc, relation = map(list, zip(*samples))
+    subclass, neg_sub, hasfunc, neg_has, relation, neg_rel, labels = map(list, zip(*samples))
+    prot, hc = map(list, zip(*hasfunc))
     hasfunc = th.stack(prot), th.stack(hc)
-    return th.stack(subclass), hasfunc, th.stack(relation)
-
+    prot, hc = map(list, zip(*neg_has))
+    neg_has = th.stack(prot), th.stack(hc)
+    data = th.stack(subclass), th.stack(neg_sub), hasfunc, neg_has, th.stack(relation), th.stack(neg_rel)
+    labels = th.stack(labels)
+    return data, labels
 
 class DGFuzModel(nn.Module):
 
@@ -175,7 +210,7 @@ class DGFuzModel(nn.Module):
                 nn.MaxPool1d(MAXLEN - kernel + 1)
             ))
         self.dg_out = nn.Linear(len(kernels) * nb_filters, embedding_size)
-
+        
         # GO Class embeddings
         self.embed = nn.Embedding(nb_gos, embedding_size)
         self.rel_embed = nn.Embedding(nb_rels, embedding_size)
@@ -183,6 +218,8 @@ class DGFuzModel(nn.Module):
         self.top[0] = 1.0
         self.bot = th.zeros(embedding_size).to(device)
         self.hasfunc_id = th.tensor([8]).to(device)
+
+        self.fc = nn.Linear(embedding_size, 1)
         
     def deepgocnn(self, proteins):
         n = proteins.shape[0]
@@ -193,7 +230,7 @@ class DGFuzModel(nn.Module):
         return self.dg_out(output.view(n, -1))
 
     def loss(self, c, d):
-        x = th.linalg.norm(c * (self.top - d), dim=1)
+        x = th.sigmoid(th.linalg.norm(c - d, dim=1))
         return x
 
     def subclass_loss(self, data):
@@ -217,9 +254,15 @@ class DGFuzModel(nn.Module):
         return self.loss(c, r + d)
         
     def forward(self, data):
-        subclass, hasfunc, relation = data
-        loss = self.subclass_loss(subclass) + self.hasfunc_loss(hasfunc) + self.relation_loss(relation)
-        return loss
+        subclass, neg_sub, hasfunc, neg_has, relation, neg_rel = data
+        subclass = self.subclass_loss(subclass).view(-1, 1)
+        neg_sub = self.subclass_loss(neg_sub).view(-1, 1)
+        hasfunc = self.hasfunc_loss(hasfunc).view(-1, 1)
+        neg_has = self.hasfunc_loss(neg_has).view(-1, 1)
+        relation = self.relation_loss(relation).view(-1, 1)
+        neg_rel = self.relation_loss(neg_rel).view(-1, 1)
+        logits = th.cat([subclass, neg_sub, hasfunc, neg_has, relation, neg_rel], dim=1)
+        return logits
 
 
 def load_data(data_file):

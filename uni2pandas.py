@@ -16,11 +16,11 @@ ORGS = set(['HUMAN', 'MOUSE', ])
     '--swissprot-file', '-sf', default='data/uniprot_sprot.dat.gz',
     help='UniProt/SwissProt knowledgebase file in text format (archived)')
 @ck.option(
-    '--out-file', '-o', default='data/swissprot.pkl',
+    '--out-file', '-o', default='data/swissprot_exp.pkl',
     help='Result file with a list of proteins, sequences and annotations')
 def main(swissprot_file, out_file):
     go = Ontology('data/go.obo', with_rels=True)
-    proteins, accessions, sequences, annotations, string_ids, orgs, genes = load_data(swissprot_file)
+    proteins, accessions, sequences, annotations, string_ids, orgs, genes, interpros = load_data(swissprot_file)
     df = pd.DataFrame({
         'proteins': proteins,
         'accessions': accessions,
@@ -28,7 +28,8 @@ def main(swissprot_file, out_file):
         'sequences': sequences,
         'annotations': annotations,
         'string_ids': string_ids,
-        'orgs': orgs
+        'orgs': orgs,
+        'interpros': interpros
     })
 
     logging.info('Filtering proteins with experimental annotations')
@@ -70,6 +71,8 @@ def main(swissprot_file, out_file):
     
     df.to_pickle(out_file)
     logging.info('Successfully saved %d proteins' % (len(df),) )
+
+    
     
 def load_data(swissprot_file):
     proteins = list()
@@ -79,6 +82,7 @@ def load_data(swissprot_file):
     string_ids = list()
     orgs = list()
     genes = list()
+    interpros = list()
     with gzip.open(swissprot_file, 'rt') as f:
         prot_id = ''
         prot_ac = ''
@@ -86,6 +90,7 @@ def load_data(swissprot_file):
         org = ''
         annots = list()
         strs = list()
+        iprs = list()
         gene_id = ''
         for line in f:
             items = line.strip().split('   ')
@@ -98,9 +103,11 @@ def load_data(swissprot_file):
                     string_ids.append(strs)
                     orgs.append(org)
                     genes.append(gene_id)
+                    interpros.append(iprs)
                 prot_id = items[1]
                 annots = list()
                 strs = list()
+                iprs = list()
                 seq = ''
                 gene_id = ''
             elif items[0] == 'AC' and len(items) > 1:
@@ -118,11 +125,14 @@ def load_data(swissprot_file):
                     go_id = items[1]
                     code = items[3].split(':')[0]
                     annots.append(go_id + '|' + code)
-                if items[0] == 'STRING':
+                elif items[0] == 'STRING':
                     str_id = items[1]
                     strs.append(str_id)
-                if items[0] == 'GeneID':
+                elif items[0] == 'GeneID':
                     gene_id = items[1]
+                elif items[0] == 'InterPro':
+                    ipr_id = items[1]
+                    iprs.append(ipr_id)
             elif items[0] == 'SQ':
                 seq = next(f).strip().replace(' ', '')
                 while True:
@@ -139,7 +149,8 @@ def load_data(swissprot_file):
         string_ids.append(strs)
         orgs.append(org)
         genes.append(gene_id)
-    return proteins, accessions, sequences, annotations, string_ids, orgs, genes
+        interpros.append(iprs)
+    return proteins, accessions, sequences, annotations, string_ids, orgs, genes, interpros
 
 
 if __name__ == '__main__':

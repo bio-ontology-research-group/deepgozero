@@ -30,6 +30,13 @@ def to_ngrams(seq):
         ngrams[i] = NGRAMS.get(seq[i: i + 3], 0)
     return ngrams
 
+def to_tokens(seq):
+    tokens = np.zeros((MAXLEN, ), dtype=np.float32)
+    l = min(MAXLEN, len(seq))
+    for i in range(l):
+        tokens[i] = AAINDEX.get(seq[i], 0)
+    return tokens
+
 def to_onehot(seq, start=0):
     onehot = np.zeros((21, MAXLEN), dtype=np.float32)
     l = min(MAXLEN, len(seq))
