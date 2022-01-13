@@ -32,6 +32,7 @@ database format to pandas dataframe.
 * evaluate.py - The scripts are used to compute Fmax, Smin and AUPR
 * evaluate_terms.py - The scripts are used to compute class-centric average AUC
 * Normalizer.groovy - The script used to normalize OWL ontology
+* Corpus.groovy - This script is used to extract class axiom definitions
 * deepgopro.py - This script is used to train the MLP baseline model
 * deepgocnn.py - This script is used to train the DeepGOCNN model
 * run_diamond.sh - This script is used to obtain Diamond predictions
