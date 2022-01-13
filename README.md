@@ -39,6 +39,14 @@ database format to pandas dataframe.
 * deepgopro.py - This script is used to train the MLP baseline model
 * deepgocnn.py - This script is used to train the DeepGOCNN model
 * run_diamond.sh - This script is used to obtain Diamond predictions
+
+
+## Zero-shot predictions
+We also make predictions for 2,935 classes without any functional annotations.
+Predictions are available for download from here:
+* [zero_predictions.tar.gz](http://deepgo.cbrc.kaust.edu.sa/data/deepgozero/zero_predictions.tar.gz)
+
+
 ## Citation
 
 If you use DeepGOZero for your research, or incorporate our learning algorithms in your work, please cite:
