@@ -35,11 +35,24 @@ def is_exp_code(code):
     return code in EXP_CODES
 
 
+def get_goplus_defs(filename='data/definitions.txt'):
+    plus_defs = {}
+    with open(filename) as f:
+        for line in f:
+            line = line.strip()
+            go_id, definition = line.split(': ')
+            go_id = go_id.replace('_', ':')
+            definition = definition.replace('_', ':')
+            plus_defs[go_id] = set(definition.split(' and '))
+    return plus_defs
+
+
 class Ontology(object):
 
     def __init__(self, filename='data/go.obo', with_rels=False):
         self.ont = self.load(filename, with_rels)
         self.ic = None
+        self.ic_norm = 0.0
 
     def has_term(self, term_id):
         return term_id in self.ont
@@ -62,6 +75,7 @@ class Ontology(object):
                 min_n = min([cnt[x] for x in parents])
 
             self.ic[go_id] = math.log(min_n / n, 2)
+            self.ic_norm = max(self.ic_norm, self.ic[go_id])
     
     def get_ic(self, go_id):
         if self.ic is None:
@@ -69,6 +83,9 @@ class Ontology(object):
         if go_id not in self.ic:
             return 0.0
         return self.ic[go_id]
+
+    def get_norm_ic(self, go_id):
+        return self.get_ic(go_id) / self.ic_norm
 
     def load(self, filename, with_rels):
         ont = dict()
@@ -200,7 +217,7 @@ def read_fasta(filename):
                     seqs.append(seq)
                     info.append(inf)
                     seq = ''
-                inf = line[1:]
+                inf = line[1:].split()[0]
             else:
                 seq += line
         seqs.append(seq)

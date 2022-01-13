@@ -35,9 +35,6 @@ reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY)
 def renderer = new ManchesterOWLSyntaxOWLObjectRendererImpl()
 def shortFormProvider = new SimpleShortFormProvider()
 
-def out = new PrintWriter(
-    new BufferedWriter(new FileWriter("data/axioms.txt")))
-
 def getName = { cl ->
   def iri = cl.toString()
   def name = iri
@@ -181,6 +178,8 @@ println("Inferred SubClasses: " + sc)
 File newOntFile = new File("data/newGO.owl");
 manager.saveOntology(ont, IRI.create(newOntFile.toURI()))
 
+def out = new PrintWriter(
+    new BufferedWriter(new FileWriter("data/newgo.sup")))
 
 out.flush()
 out.close()

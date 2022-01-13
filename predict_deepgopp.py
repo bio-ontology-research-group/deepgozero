@@ -18,37 +18,38 @@ from matplotlib import pyplot as plt
 
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 
-def get_goplus_defs():
-    plus_defs = {}
-    with open('data/definitions.txt') as f:
-        for line in f:
-            line = line.strip()
-            go_id, definition = line.split(': ')
-            go_id = go_id.replace('_', ':')
-            definition = definition.replace('_', ':')
-            plus_defs[go_id] = set(definition.split(' and '))
-    return plus_defs
+# def get_goplus_defs():
+#     plus_defs = {}
+#     with open('data/definitions_mf.txt') as f:
+#         for line in f:
+#             line = line.strip()
+#             go_id, definition = line.split(': ')
+#             go_id = go_id.replace('_', ':')
+#             definition = definition.replace('_', ':')
+#             plus_defs[go_id] = set(definition.split(' and '))
+#     return plus_defs
 
+ont = 'mf'
 
 @ck.command()
 @ck.option(
-    '--train-data-file', '-trdf', default='data/train_data.pkl',
+    '--train-data-file', '-trdf', default=f'data/{ont}/train_data.pkl',
     help='Data file with training features')
 @ck.option(
-    '--test-data-file', '-tsdf', default='data/predictions_deepgogcn.pkl',
+    '--valid-data-file', '-vrdf', default=f'data/{ont}/valid_data.pkl',
+    help='Data file with training features')
+@ck.option(
+    '--test-data-file', '-tsdf', default=f'data/{ont}/predictions_deepgoel.pkl',
     help='Test data file')
 @ck.option(
-    '--terms-file', '-tf', default='data/bp.pkl',
+    '--terms-file', '-tf', default=f'data/{ont}/terms.pkl',
     help='Data file with sequences and complete set of annotations')
 @ck.option(
-    '--ont', '-ont', default='mf',
-    help='GO SubOntology mf, bp, cc')
-@ck.option(
-    '--diamond-scores-file', '-dsf', default='data/test_diamond.res',
+    '--diamond-scores-file', '-dsf', default=f'data/{ont}/test_diamond.res',
     help='Diamond output')
 @ck.option(
     '--out_file', '-of', help='Output file')
-def main(train_data_file, test_data_file, terms_file, ont,
+def main(train_data_file, valid_data_file, test_data_file, terms_file,
          diamond_scores_file, out_file):
 
     go_rels = Ontology('data/go.obo', with_rels=True)
@@ -57,6 +58,8 @@ def main(train_data_file, test_data_file, terms_file, ont,
     terms_dict = {v: i for i, v in enumerate(terms)}
 
     train_df = pd.read_pickle(train_data_file)
+    valid_df = pd.read_pickle(valid_data_file)
+    train_df = pd.concat([train_df, valid_df])
     test_df = pd.read_pickle(test_data_file)
     # test_df = test_df[test_df["orgs"] == "9606"]
     
@@ -120,44 +123,46 @@ def main(train_data_file, test_data_file, terms_file, ont,
     # print(len(go_set))
     deep_preds = []
     # Load definitions
-    # plus_defs = get_goplus_defs()
-    # for i, row in enumerate(test_df.itertuples()):
-    #     annots_dict = {}
-    #     for j, score in enumerate(row.preds):
-    #         go_id = terms[j]
-    #         if not go_id.startswith('GO'):
-    #             continue
-    #         annots_dict[go_id] = score
-    #     for go_id, defs in plus_defs.items():
-    #         mscore = 1
-    #         ok = True
-    #         for t_id in defs:
-    #             if t_id in terms_dict:
-    #                 mscore = min(mscore, row.preds[terms_dict[t_id]])
-    #             else:
-    #                 ok = False
-    #                 break
-    #         if ok:
-    #             annots_dict[go_id] = mscore        
-    #     deep_preds.append(annots_dict)
+    plus_defs = get_goplus_defs()
+    for i, row in enumerate(test_df.itertuples()):
+        annots_dict = {}
+        for j, score in enumerate(row.preds):
+            go_id = terms[j]
+            if not go_id.startswith('GO'):
+                continue
+            annots_dict[go_id] = score
+        # for go_id, defs in plus_defs.items():
+        #     if go_id not in terms_dict:
+        #         continue
+        #     mscore = 1
+        #     ok = True
+        #     for t_id in defs:
+        #         if t_id in terms_dict:
+        #             mscore = min(mscore, row.preds[terms_dict[t_id]])
+        #         else:
+        #             ok = False
+        #             break
+        #     if ok:
+        #         annots_dict[go_id] = max(annots_dict[go_id], mscore)        
+        deep_preds.append(annots_dict)
 
-    # # Combine scores for diamond and deepgo
-    # alphas = {NAMESPACES['mf']: 0.55, NAMESPACES['bp']: 0.58, NAMESPACES['cc']: 0.45}
-    # comb_preds = []
-    # for i in range(len(blast_preds)):
-    #     gos = set(blast_preds[i]) | set(deep_preds[i])
-    #     annots_dict = {}
-    #     for go_id in gos:
-    #         if not go_rels.has_term(go_id):
-    #             continue
-    #         alpha = alphas[go_rels.get_namespace(go_id)]
-    #         if go_id in blast_preds[i] and go_id in deep_preds[i]:
-    #             annots_dict[go_id] = blast_preds[i][go_id] * alpha + deep_preds[i][go_id] * (1 - alpha)
-    #         elif go_id in blast_preds[i]:
-    #             annots_dict[go_id] = blast_preds[i][go_id] * alpha
-    #         else:
-    #             annots_dict[go_id] = deep_preds[i][go_id] * (1 - alpha)
-    #     comb_preds.append(annots_dict)
+    # Combine scores for diamond and deepgo
+    alphas = {NAMESPACES['mf']: 0.5, NAMESPACES['bp']: 0.5, NAMESPACES['cc']: 0.5}
+    comb_preds = []
+    for i in range(len(blast_preds)):
+        gos = set(blast_preds[i]) | set(deep_preds[i])
+        annots_dict = {}
+        for go_id in gos:
+            if not go_rels.has_term(go_id):
+                continue
+            alpha = alphas[go_rels.get_namespace(go_id)]
+            if go_id in blast_preds[i] and go_id in deep_preds[i]:
+                annots_dict[go_id] = blast_preds[i][go_id] * alpha + deep_preds[i][go_id] * (1 - alpha)
+            elif go_id in blast_preds[i]:
+                annots_dict[go_id] = blast_preds[i][go_id] * alpha
+            else:
+                annots_dict[go_id] = deep_preds[i][go_id] * (1 - alpha)
+        comb_preds.append(annots_dict)
     # print('AUTHOR DeepGOPlus')
     # print('MODEL 1')
     # print('KEYWORDS sequence alignment.')
@@ -188,7 +193,7 @@ def main(train_data_file, test_data_file, terms_file, ont,
     smin = 1000000.0
     rus = []
     mis = []
-    for t in range(1, 101):
+    for t in range(0, 101):
         threshold = t / 100.0
         preds = []
         for i, row in enumerate(test_df.itertuples()):

@@ -1,4 +1,10 @@
+*.pdf
+data_temp/
 data/
+*.eps
+data-netgo/
+data-cafa3/
+*.tar.gz
 *~
 
 # Byte-compiled / optimized / DLL files

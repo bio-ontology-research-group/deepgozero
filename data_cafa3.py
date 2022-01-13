@@ -2,20 +2,21 @@ import click as ck
 import numpy as np
 import pandas as pd
 from collections import Counter
-from utils import Ontology, FUNC_DICT, NAMESPACES, MOLECULAR_FUNCTION, BIOLOGICAL_PROCESS, CELLULAR_COMPONENT
+from utils import Ontology, FUNC_DICT, NAMESPACES, read_fasta
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO)
 
 @ck.command()
 @ck.option(
-    '--go-file', '-gf', default='data/go.obo',
+    '--go-file', '-gf', default='data-cafa3/go.obo',
     help='Gene Ontology file in OBO Format')
 @ck.option(
-    '--data-file', '-df', default='data/swissprot_exp_zero_10.pkl',
+    '--data-file', '-df', default='data-cafa3/swissprot_exp.pkl',
     help='Uniprot KB, generated with uni2pandas.py')
 @ck.option(
-    '--sim-file', '-sf', default='data/swissprot_exp.sim',
+    '--sim-file', '-sf', default='data-cafa3/swissprot_exp.sim',
     help='Sequence similarity generated with Diamond')
 def main(go_file, data_file, sim_file):
     go = Ontology(go_file, with_rels=True)
@@ -25,17 +26,73 @@ def main(go_file, data_file, sim_file):
     proteins = set(df['proteins'].values)
     
     print("DATA FILE" ,len(df))
+
+    print("Loading CAFA3 data")
+
+    targets, seqs = read_fasta('data-cafa3/CAFA3_targets/targets_all.fasta')
+    sequences = {t: s for t, s in zip(targets, seqs)}
+    nk_proteins = set()
+    nk_files = ['bpo_all_type1.txt', 'mfo_all_type1.txt', 'cco_all_type1.txt']
+    for filename in nk_files:
+        with open(f'data-cafa3/benchmark20171115/lists/{filename}') as f:
+            proteins = f.read().splitlines()
+            nk_proteins |= set(proteins)
+    exp_annots = {}
+    with open('data-cafa3/benchmark20171115/groundtruth/leafonly_all.txt') as f:
+        for line in f:
+            target_id, go_id = line.strip().split('\t')
+            if target_id not in nk_proteins:
+                continue
+            if target_id not in exp_annots:
+                exp_annots[target_id] = []
+            exp_annots[target_id].append(go_id)
+
+    interpros = {}
+    with open('data-cafa3/benchmark20171115/targets.fasta.tsv') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            t_id, ipr = it[0], it[11]
+            if t_id not in interpros:
+                interpros[t_id] = set()
+            interpros[t_id].add(ipr)
     
-    logging.info('Processing annotations')
+    seqs = []
+    targets = []
+    exp_annotations = []
+    prop_annotations = []
+    iprs = []
+    for t_id, annots in exp_annots.items():
+        targets.append(t_id)
+        exp_annotations.append(annots)
+        seqs.append(sequences[t_id])
+        annot_set = set()
+        for go_id in annots:
+            annot_set |= go.get_anchestors(go_id)
+        annots = list(annot_set)
+        prop_annotations.append(annots)
+        if t_id in interpros:
+            iprs.append(interpros[t_id])
+        else:
+            iprs.append(set())
+    test_df = pd.DataFrame({
+        'proteins': targets,
+        'sequences': seqs,
+        'exp_annotations': exp_annotations,
+        'prop_annotations': prop_annotations,
+        'interpros': iprs
+    })
+        
+    print('Processing train and valid annotations')
     
     annotations = list()
     for ont in ['mf', 'bp', 'cc']:
         cnt = Counter()
         iprs = Counter()
         index = []
+        test_index = []
         for i, row in enumerate(df.itertuples()):
             ok = False
-            for term in row.zero_annotations:
+            for term in row.prop_annotations:
                 if go.get_namespace(term) == NAMESPACES[ont]:
                     cnt[term] += 1
                     ok = True
@@ -44,6 +101,17 @@ def main(go_file, data_file, sim_file):
             if ok:
                 index.append(i)
 
+        for i, row in enumerate(test_df.itertuples()):
+            ok = False
+            for term in row.prop_annotations:
+                if go.get_namespace(term) == NAMESPACES[ont]:
+                    ok = True
+                if len(row.interpros) == 0:
+                    ok = False
+            if ok:
+                test_index.append(i)
+
+            
         del cnt[FUNC_DICT[ont]] # Remove top term
         tdf = df.iloc[index]
         terms = list(cnt.keys())
@@ -54,10 +122,9 @@ def main(go_file, data_file, sim_file):
         print(f'Number of {ont} proteins {len(tdf)}')
     
         terms_df = pd.DataFrame({'gos': terms})
-        terms_df.to_pickle(f'data/{ont}/terms_zero_10.pkl')
-        continue
+        terms_df.to_pickle(f'data-cafa3/{ont}/terms.pkl')
         iprs_df = pd.DataFrame({'interpros': interpros})
-        # iprs_df.to_pickle(f'data/{ont}/interpros.pkl')
+        iprs_df.to_pickle(f'data-cafa3/{ont}/interpros.pkl')
 
         # Split train/valid/test
         proteins = tdf['proteins']
@@ -102,34 +169,29 @@ def main(go_file, data_file, sim_file):
         np.random.seed(seed=0)
         np.random.shuffle(index)
         train_n = int(len(groups) * 0.9)
-        valid_n = int(train_n * 0.9)
-    
         train_index = []
         valid_index = []
-        test_index = []
-        for idx in index[:valid_n]:
+        for idx in index[:train_n]:
             for prot in groups[idx]:
                 train_index.append(prot_idx[prot])
-        for idx in index[valid_n:train_n]:
-            for prot in groups[idx]:
-                valid_index.append(prot_idx[prot])
         for idx in index[train_n:]:
             for prot in groups[idx]:
-                test_index.append(prot_idx[prot])
+                valid_index.append(prot_idx[prot])
                 
         train_index = np.array(train_index)
         valid_index = np.array(valid_index)
-        test_index = np.array(test_index)
-
+        
         train_df = tdf.iloc[train_index]
-        train_df.to_pickle(f'data/{ont}/train_data.pkl')
+        train_df.to_pickle(f'data-cafa3/{ont}/train_data.pkl')
         valid_df = tdf.iloc[valid_index]
-        valid_df.to_pickle(f'data/{ont}/valid_data.pkl')
-        test_df = tdf.iloc[test_index]
-        test_df.to_pickle(f'data/{ont}/test_data.pkl')
+        valid_df.to_pickle(f'data-cafa3/{ont}/valid_data.pkl')
+        ts_df = test_df.iloc[test_index]
+        ts_df.to_pickle(f'data-cafa3/{ont}/test_data.pkl')
+        
+        
+        print(f'Train/Valid proteins for {ont} {len(train_df)}/{len(valid_df)}')
+        print(f'Test proteins for {ont} {len(ts_df)}')
 
-        print(f'Train/Valid/Test proteins for {ont} {len(train_df)}/{len(valid_df)}/{len(test_df)}')
 
-    
 if __name__ == '__main__':
     main()
