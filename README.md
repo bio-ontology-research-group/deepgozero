@@ -1,8 +1,11 @@
 # DeepGOZero: Improving protein function prediction from sequence and zero-shot learning based on ontology axioms
 
-DeepGOPlus is a novel method for predicting protein functions from
-protein sequences using deep neural networks combined with sequence
-similarity based predictions.
+DeepGOZero is a novel method which uses model-theoretic approach for
+  learning ontology embeddings and combine it with neural networks for
+  protein function prediction. DeepGOZero can exploit formal axioms in
+  the GO to make zero-shot predictions, i.e., predict protein
+  functions even if not a single protein in the training phase was
+  associated with that function.
 
 This repository contains script which were used to build and train the
 DeepGOZero model together with the scripts for evaluating the model's
