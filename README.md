@@ -28,8 +28,10 @@ database format to pandas dataframe.
 * deepgozero_data.py - This script is used to generate training and
   testing datasets.
 * deepgozero.py - This script is used to train the model
+* deepgozero_predict.py - This script is used to perform zero-shot predictions
 * evaluate.py - The scripts are used to compute Fmax, Smin and AUPR
-
+* evaluate_terms.py - The scripts are used to compute class-centric average AUC
+* Normalizer.groovy - The script used to normalize OWL ontology
 
 ## Citation
 
