@@ -22,7 +22,7 @@ used to train and evaluate our method.
  * data-netgo.tar.gz - NetGO2.0 based dataset
 
 ## Scripts
-The scripts require GeneOntology in OBO Format.
+The scripts require GeneOntology in OBO and OWL Formats.
 * uni2pandas.py - This script is used to convert data from UniProt
 database format to pandas dataframe.
 * deepgozero_data.py - This script is used to generate training and
@@ -32,7 +32,9 @@ database format to pandas dataframe.
 * evaluate.py - The scripts are used to compute Fmax, Smin and AUPR
 * evaluate_terms.py - The scripts are used to compute class-centric average AUC
 * Normalizer.groovy - The script used to normalize OWL ontology
-
+* deepgopro.py - This script is used to train the MLP baseline model
+* deepgocnn.py - This script is used to train the DeepGOCNN model
+* run_diamond.sh - This script is used to obtain Diamond predictions
 ## Citation
 
 If you use DeepGOZero for your research, or incorporate our learning algorithms in your work, please cite:
