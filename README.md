@@ -19,7 +19,7 @@ performance.
 
 
 ## Data
-* http://deepgo.cbrc.kaust.edu.sa/data/deepgozero/ - Here you can find the data
+* https://deepgo.cbrc.kaust.edu.sa/data/deepgozero/ - Here you can find the data
 used to train and evaluate our method.
  * data.tar.gz - UniProtKB-SwissProt dataset (release 21_04)
  * data-netgo.tar.gz - NetGO2.0 based dataset
@@ -44,7 +44,7 @@ database format to pandas dataframe.
 ## Zero-shot predictions
 We also make predictions for 2,935 classes without any functional annotations.
 Predictions are available for download from here:
-* [zero_predictions.tar.gz](http://deepgo.cbrc.kaust.edu.sa/data/deepgozero/zero_predictions.tar.gz)
+* [zero_predictions.tar.gz](https://deepgo.cbrc.kaust.edu.sa/data/deepgozero/zero_predictions.tar.gz)
 
 
 ## Citation
