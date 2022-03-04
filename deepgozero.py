@@ -99,7 +99,7 @@ def main(data_root, ont, batch_size, epochs, load, device):
                     el_loss = net.el_loss(normal_forms)
                     total_loss = loss + el_loss
                     train_loss += loss.detach().item()
-                    train_elloss = el_loss.detach().item()
+                    train_elloss += el_loss.detach().item()
                     optimizer.zero_grad()
                     total_loss.backward()
                     optimizer.step()
