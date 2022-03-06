@@ -1,7 +1,7 @@
 import click as ck
 import numpy as np
 import pandas as pd
-from collections import Counter
+from collections import Counter, deque
 from utils import Ontology, FUNC_DICT, NAMESPACES, MOLECULAR_FUNCTION, BIOLOGICAL_PROCESS, CELLULAR_COMPONENT
 import logging
 
@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
     '--go-file', '-gf', default='data/go.obo',
     help='Gene Ontology file in OBO Format')
 @ck.option(
-    '--data-file', '-df', default='data/swissprot_exp_zero_10.pkl',
+    '--data-file', '-df', default='data/swissprot_exp.pkl',
     help='Uniprot KB, generated with uni2pandas.py')
 @ck.option(
     '--sim-file', '-sf', default='data/swissprot_exp.sim',
@@ -35,7 +35,7 @@ def main(go_file, data_file, sim_file):
         index = []
         for i, row in enumerate(df.itertuples()):
             ok = False
-            for term in row.zero_annotations:
+            for term in row.prop_annotations:
                 if go.get_namespace(term) == NAMESPACES[ont]:
                     cnt[term] += 1
                     ok = True
@@ -54,8 +54,7 @@ def main(go_file, data_file, sim_file):
         print(f'Number of {ont} proteins {len(tdf)}')
     
         terms_df = pd.DataFrame({'gos': terms})
-        terms_df.to_pickle(f'data/{ont}/terms_zero_10.pkl')
-        continue
+        terms_df.to_pickle(f'data/{ont}/terms.pkl')
         iprs_df = pd.DataFrame({'interpros': interpros})
         # iprs_df.to_pickle(f'data/{ont}/interpros.pkl')
 
@@ -71,7 +70,7 @@ def main(go_file, data_file, sim_file):
                 p1, p2, score = it[0], it[1], float(it[2]) / 100.0
                 if p1 == p2:
                     continue
-                if score < 0.5:
+                if score < 0.5: # Comment this for hard split
                     continue
                 if p1 not in prot_set or p2 not in prot_set:
                     continue
@@ -83,21 +82,32 @@ def main(go_file, data_file, sim_file):
                 sim[p2].append(p1)
 
         used = set()
-        def dfs(prots, prot):
+        
+        def dfs(prot):
+            stack = deque()
+            stack.append(prot)
             used.add(prot)
-            if prot in sim:
-                for p in sim[prot]:
-                    if p not in used:
-                        dfs(prots, p)
-            prots.append(prot)
+            prots = []
+            while len(stack) > 0:
+                prot = stack.pop()
+                prots.append(prot)
+                used.add(prot)
+                if prot in sim:
+                    for p in sim[prot]:
+                        if p not in used:
+                            used.add(p)
+                            stack.append(p)
+            return prots
 
         groups = []
         for p in proteins:
-            group = []
             if p not in used:
-                dfs(group, p)
+                group = dfs(p)
                 groups.append(group)
-        print(len(proteins), len(groups))
+        s = 0
+        for g in groups:
+            s += len(g)
+        print(len(proteins), len(groups), s)
         index = np.arange(len(groups))
         np.random.seed(seed=0)
         np.random.shuffle(index)
@@ -122,11 +132,11 @@ def main(go_file, data_file, sim_file):
         test_index = np.array(test_index)
 
         train_df = tdf.iloc[train_index]
-        train_df.to_pickle(f'data/{ont}/train_data.pkl')
+        train_df.to_pickle(f'data/{ont}/train_data_hard.pkl')
         valid_df = tdf.iloc[valid_index]
-        valid_df.to_pickle(f'data/{ont}/valid_data.pkl')
+        valid_df.to_pickle(f'data/{ont}/valid_data_hard.pkl')
         test_df = tdf.iloc[test_index]
-        test_df.to_pickle(f'data/{ont}/test_data.pkl')
+        test_df.to_pickle(f'data/{ont}/test_data_hard.pkl')
 
         print(f'Train/Valid/Test proteins for {ont} {len(train_df)}/{len(valid_df)}/{len(test_df)}')
 
