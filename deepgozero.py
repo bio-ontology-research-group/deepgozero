@@ -248,7 +248,7 @@ class MLPBlock(nn.Module):
         super().__init__()
         self.linear = nn.Linear(in_features, out_features, bias)
         self.activation = activation()
-        self.layer_norm = nn.LayerNorm(out_features) if layer_norm else None
+        self.layer_norm = nn.BatchNorm(out_features) if layer_norm else None
         self.dropout = nn.Dropout(dropout) if dropout else None
 
     def forward(self, x):
