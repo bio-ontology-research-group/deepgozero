@@ -17,7 +17,7 @@ from utils import get_goplus_defs, Ontology, NAMESPACES
 
 logging.basicConfig(level=logging.INFO)
 
-from deepgoel import DGELModel, load_normal_forms
+from deepgozero import DGELModel, load_normal_forms
 from torch_utils import FastTensorDataLoader
 
 ont = 'mf'
